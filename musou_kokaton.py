@@ -128,12 +128,15 @@ class Bomb(pg.sprite.Sprite):
         self.rect.centerx = emy.rect.centerx
         self.rect.centery = emy.rect.centery+emy.rect.height/2
         self.speed = 6
-
-    def update(self):
+        self.state=0
+    def update(self,emp):
         """
         爆弾を速度ベクトルself.vx, self.vyに基づき移動させる
         引数 screen：画面Surface
         """
+        if emp==1:
+            self.speed=3
+            self.state=1
         self.rect.move_ip(+self.speed*self.vx, +self.speed*self.vy)
         if check_bound(self.rect) != (True, True):
             self.kill()
@@ -213,12 +216,15 @@ class Enemy(pg.sprite.Sprite):
         self.state = "down"  # 降下状態or停止状態
         self.interval = random.randint(50, 300)  # 爆弾投下インターバル
 
-    def update(self):
+    def update(self,emp):
         """
         敵機を速度ベクトルself.vyに基づき移動（降下）させる
         ランダムに決めた停止位置_boundまで降下したら，_stateを停止状態に変更する
         引数 screen：画面Surface
         """
+        if emp==1:
+            self.interval = 10000
+            self.image=pg.transform.laplacian(self.image)
         if self.rect.centery > self.bound:
             self.vy = 0
             self.state = "stop"
@@ -234,7 +240,7 @@ class Score:
     def __init__(self):
         self.font = pg.font.Font(None, 50)
         self.color = (0, 0, 255)
-        self.value = 0
+        self.value = 1000
         self.image = self.font.render(f"Score: {self.value}", 0, self.color)
         self.rect = self.image.get_rect()
         self.rect.center = 100, HEIGHT-50
@@ -249,13 +255,14 @@ def main():
     screen = pg.display.set_mode((WIDTH, HEIGHT))
     bg_img = pg.image.load(f"{MAIN_DIR}/fig/pg_bg.jpg")
     score = Score()
-
+    emp=0
+    emp_time=0
     bird = Bird(3, (900, 400))
     bombs = pg.sprite.Group()
     beams = pg.sprite.Group()
     exps = pg.sprite.Group()
     emys = pg.sprite.Group()
-
+    emps = pg.sprite.Group()
     tmr = 0
     clock = pg.time.Clock()
     while True:
@@ -265,11 +272,16 @@ def main():
                 return 0
             if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:
                 beams.add(Beam(bird))
+            if event.type == pg.KEYDOWN and event.key == pg.K_e and score.value >=20:
+                pg.draw.rect(screen, (255,255,0), (0,0,1600,900))
+                pg.display.update()
+                emp=1
+                score.value-=20
+            elif event.type == pg.KEYUP and event.key == pg.K_e and score.value >=20:
+                emp=0
         screen.blit(bg_img, [0, 0])
-
         if tmr%200 == 0:  # 200フレームに1回，敵機を出現させる
             emys.add(Enemy())
-
         for emy in emys:
             if emy.state == "stop" and tmr%emy.interval == 0:
                 # 敵機が停止状態に入ったら，intervalに応じて爆弾投下
@@ -278,30 +290,34 @@ def main():
         for emy in pg.sprite.groupcollide(emys, beams, True, True).keys():
             exps.add(Explosion(emy, 100))  # 爆発エフェクト
             score.value += 10  # 10点アップ
-            bird.change_img(6, screen)  # こうかとん喜びsエフェクト
+            bird.change_img(6, screen)  # こうかとん喜びエフェクト
 
         for bomb in pg.sprite.groupcollide(bombs, beams, True, True).keys():
             exps.add(Explosion(bomb, 50))  # 爆発エフェクト
             score.value += 1  # 1点アップ
 
         if len(pg.sprite.spritecollide(bird, bombs, True)) != 0:
-            bird.change_img(8, screen) # こうかとん悲しみエフェクト
-            score.update(screen)
-            pg.display.update()
-            time.sleep(2)
-            return
-
+            for bomb in bombs:
+                if bomb.state==1:
+                    pg.display.update()
+                elif bomb.state==0:
+                    bird.change_img(8, screen) # こうかとん悲しみエフェクト
+                    score.update(screen)
+                    pg.display.update()
+                    time.sleep(2)
+                    return
         bird.update(key_lst, screen)
         beams.update()
         beams.draw(screen)
-        emys.update()
+        emys.update(emp)
         emys.draw(screen)
-        bombs.update()
+        bombs.update(emp)
         bombs.draw(screen)
         exps.update()
         exps.draw(screen)
         score.update(screen)
         pg.display.update()
+        imagey = pg.Surface((1600, 900))
         tmr += 1
         clock.tick(50)
 

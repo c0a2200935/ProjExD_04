@@ -291,9 +291,16 @@ def main():
                 return 0
             if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:
                 beams.add(Beam(bird))
+
             if event.type == pg.KEYDOWN and event.key == pg.K_RETURN and 200 <= score.value:
                 gravity_effect = Gravity(400)
                 score.value -= 200
+
+            if event.type == pg.KEYDOWN and event.key == pg.K_LSHIFT:  # 追加機能１
+                bird.speed = 20
+            else:
+                bird.speed = 10
+
         screen.blit(bg_img, [0, 0])
 
         if tmr%200 == 0:  # 200フレームに1回，敵機を出現させる

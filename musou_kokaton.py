@@ -111,7 +111,7 @@ class Bird(pg.sprite.Sprite):
         if self.hyper_life < 0:
             self.state = "normal"
             self.hyper_life = 0
-
+        score.update(screen) 
         screen.blit(self.image, self.rect)
 
 
@@ -130,26 +130,27 @@ class Bomb(pg.sprite.Sprite):
         super().__init__()
         rad = random.randint(10, 50)  # 爆弾円の半径：10以上50以下の乱数
         color = random.choice(__class__.colors)  # 爆弾円の色：クラス変数からランダム選択
-        self.image = pg.Surface((2*rad, 2*rad))
+        self.image = pg.Surface((2 * rad, 2 * rad))
         pg.draw.circle(self.image, color, (rad, rad), rad)
         self.image.set_colorkey((0, 0, 0))
         self.rect = self.image.get_rect()
         # 爆弾を投下するemyから見た攻撃対象のbirdの方向を計算
-        self.vx, self.vy = calc_orientation(emy.rect, bird.rect)  
+        self.vx, self.vy = calc_orientation(emy.rect, bird.rect)
         self.rect.centerx = emy.rect.centerx
-        self.rect.centery = emy.rect.centery+emy.rect.height/2
+        self.rect.centery = emy.rect.centery + emy.rect.height / 2
         self.speed = 6
-        self.state=0
-    def update(self,emp):
+        self.state = 0
+
+    def update(self, emp):
         """
         爆弾を速度ベクトルself.vx, self.vyに基づき移動させる
         引数 screen：画面Surface
         """
-        if emp==1:
-            self.speed=3
-            self.state=1
-        self.rect.move_ip(+self.speed*self.vx, +self.speed*self.vy)
-        if check_bound(self.rect) != (True, True):
+        if emp == 1:
+            self.speed = 3
+            self.state = 1
+        self.rect.move_ip(+self.speed * self.vx, +self.speed * self.vy)
+        if not check_bound(self.rect):
             self.kill()
 
 
@@ -263,33 +264,50 @@ class Score:
         screen.blit(self.image, self.rect)
 
 
-
 class Shield(pg.sprite.Sprite):
     """
     防御壁に関するクラス
     """
+    _active_shield = None  # クラス変数でアクティブなシールドを保持
+
     def __init__(self, bird: Bird):
         super().__init__()
+
+        # アクティブなシールドが存在する場合は新たなシールドは生成しない
+        if Shield._active_shield:
+            self.kill()
+            return
+
         self.life = 400
-        self.image = pg.Surface((20, bird.rect.height*2))
-        pg.draw.rect(self.image, (0, 0, 255), (0, 0, 20, bird.rect.height*2))
+        self.image = pg.Surface((20, bird.rect.height * 2))
+        pg.draw.rect(self.image, (0, 0, 255), (0, 0, 20, bird.rect.height * 2))
         self.image.set_colorkey((0, 0, 0))
         self.rect = self.image.get_rect()
         vx, vy = bird.dire
         self.rect.centerx = bird.rect.centerx + bird.rect.width * vx
         self.rect.centery = bird.rect.centery
 
-    def update(self, screen: pg.Surface):
+        Shield._active_shield = self  # アクティブなシールドを更新
+
+    def update(self, screen: pg.Surface, bombs: pg.sprite.Group(), exps: pg.sprite.Group(), score: "Score"):
         """
         壁の向きを移動方向に応じて変える
         引数 screen：画面Surface
         """
+        if not hasattr(self, 'life'):  # life属性がない場合は何もしない
+            return
+
         self.life -= 1
         screen.blit(self.image, self.rect)
+
+        for bomb_hit in pg.sprite.spritecollide(self, bombs, True):
+            exps.add(Explosion(bomb_hit, 50))  # 爆発エフェクト
+            score.value += 1  # 1点アップ
+
         if self.life < 0:
             self.kill()
+            Shield._active_shield = None  # シールドが破壊されたらアクティブなシールドをクリア
         
-
 
 class Gravity:
     def __init__(self,life) :
@@ -435,7 +453,7 @@ def main():
                 gravity_effect = None
                 
 
-        bird.update(key_lst, screen)
+        bird.update(key_lst, screen,score)
 
         beams.update()
         beams.draw(screen)
@@ -446,7 +464,7 @@ def main():
         exps.update()
         exps.draw(screen)
         score.update(screen)
-        shield.update(screen)
+        shield.update(screen,bombs,exps,score)
         pg.display.update()
         imagey = pg.Surface((1600, 900))
         tmr += 1

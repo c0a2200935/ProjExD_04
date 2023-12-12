@@ -151,7 +151,9 @@ class Bomb(pg.sprite.Sprite):
             self.state = 1
         self.rect.move_ip(+self.speed * self.vx, +self.speed * self.vy)
         if not check_bound(self.rect):
-            self.kill()
+            if self.state == 0:  # 画面外に出たらkillする
+                self.kill()
+            self.state = 0  # 画面外に出たらstateを0に戻す
 
 
 class Beam(pg.sprite.Sprite):
@@ -268,26 +270,38 @@ class Shield(pg.sprite.Sprite):
     """
     防御壁に関するクラス
     """
-    _active_shield = None  # クラス変数でアクティブなシールドを保持
+    _active_shields = pg.sprite.Group()  # アクティブなシールドを管理するグループ
 
     def __init__(self, bird: Bird):
         super().__init__()
 
         # アクティブなシールドが存在する場合は新たなシールドは生成しない
-        if Shield._active_shield:
+        if len(Shield._active_shields) > 0:
             self.kill()
             return
 
         self.life = 400
-        self.image = pg.Surface((20, bird.rect.height * 2))
-        pg.draw.rect(self.image, (0, 0, 255), (0, 0, 20, bird.rect.height * 2))
+        self.image = pg.Surface((bird.rect.width * 2, 20))
+        pg.draw.rect(self.image, (0, 0, 255), (0, 0, bird.rect.width * 2, 20))
         self.image.set_colorkey((0, 0, 0))
         self.rect = self.image.get_rect()
-        vx, vy = bird.dire
-        self.rect.centerx = bird.rect.centerx + bird.rect.width * vx
-        self.rect.centery = bird.rect.centery
 
-        Shield._active_shield = self  # アクティブなシールドを更新
+        # 鳥が向いている方向に応じてシールドの位置を調整
+        vx, vy = bird.dire
+        if vy == -1:  # 鳥が上を向いている場合
+            self.rect.centerx = bird.rect.centerx
+            self.rect.centery = bird.rect.top
+        elif vy == 1:  # 鳥が下を向いている場合
+            self.rect.centerx = bird.rect.centerx
+            self.rect.centery = bird.rect.bottom
+        elif vx == 1:  # 鳥が右を向いている場合
+            self.rect.centerx = bird.rect.right
+            self.rect.centery = bird.rect.centery
+        elif vx == -1:  # 鳥が左を向いている場合
+            self.rect.centerx = bird.rect.left
+            self.rect.centery = bird.rect.centery
+
+        Shield._active_shields.add(self)  # アクティブなシールドをグループに追加
 
     def update(self, screen: pg.Surface, bombs: pg.sprite.Group(), exps: pg.sprite.Group(), score: "Score"):
         """
@@ -306,7 +320,7 @@ class Shield(pg.sprite.Sprite):
 
         if self.life < 0:
             self.kill()
-            Shield._active_shield = None  # シールドが破壊されたらアクティブなシールドをクリア
+            Shield._active_shields.remove(self)
         
 
 class Gravity:
@@ -414,15 +428,15 @@ def main():
             score.value += 1  # 1点アップ
 
 
-        for bomb_hit in pg.sprite.spritecollide(bird, bombs, True):
-            if bird.state == "normal":
-                bird.change_img(8, screen) # こうかとん悲しみエフェクト
+        for bomb_hit in pg.sprite.spritecollide(bird, bombs, False):
+            if bird.state == "normal" and bomb_hit.state == 0:
+                bird.change_img(8, screen)  # こうかとん悲しみエフェクト
                 score.update(screen)
                 pg.display.update()
                 time.sleep(2)
                 return
             if bird.state == "hyper":
-                exps.add(Explosion(bomb_hit,50))              
+                exps.add(Explosion(bomb_hit, 50))
                 score.value += 1
 
         bird.update(key_lst, screen, score)
